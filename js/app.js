@@ -1,18 +1,9 @@
-
 (function() {
 
   var app = window.app || {};
 
-  //var todo = {id: '1', content: 'Todo nr 1', flag: 'active'};
-
-
   app.todoCollection = (function () {
     var _this = this;
-    /*this.todos = [
-      {id: 1, content: 'Todo nr 1', flag: true},
-      {id: 2, content: 'Todo nr 2', flag: true},
-      {id: 3, content: 'Todo nr 3', flag: true}
-    ];*/
 
     function getTodos() {
       var collection = JSON.parse(localStorage.getItem('todoCollection'));
@@ -24,13 +15,12 @@
     };
 
     function getTodo(id) {
-      var todo;
-      for (var i = 0; i < todos.length; i++) {
-        if (todos[i].id == id) {
-          todo = todos[i];
-        }
-      };
-      if (todo) {return todo} else {return {}};
+      var todos = _this.todos;
+      if (todos[id]) {
+        return todos[id];
+      } else {
+        return {};
+      }
     }
 
     function deleteTodo(id) {
@@ -43,19 +33,10 @@
 
     function saveTodo(model) {
       var todos = _this.todos;
-      if (model.id) {
-        var todo = getTodo(model.id);
-        if (todo) {
-          todos[todos.indexOf(todo)] = model;
-        }
-      }
-      else {
-        if (todos.length > 0) {
-          model.id = todos[todos.length-1].id+1;
-        } else {
-          model.id = 1;
-        }
+      if (todos.indexOf(model) < 0) {
         todos.push(model);
+      } else {
+        todos[todos.indexOf(model)] = model;
       }
       sync();
       //logState();
@@ -90,10 +71,16 @@
 
   })();
 
+
+
+
   Todo = function(content) {
     this.content = content || '',
     this.flag = 'active'
   };
+
+
+
 
   app.todoView = (function() {
     var _this = this;
@@ -108,10 +95,10 @@
         var item = collection[i];
         var checked = item.flag == false ? 'checked' : '';
         var liFrag = [];
-        liFrag.push('<li class="'+ checked +'" data-todoID="'+item.id+'">');
+        liFrag.push('<li class="'+ checked +'" data-todoID="'+i+'">');
         liFrag.push('<span class="checkbox"><input type="checkbox" '+ checked +' /></span>');
         liFrag.push('<span class="li-content text-left">'+item.content+'</span>');
-        liFrag.push('<span class="action text-right"><button class="btn-delete" data-todoID="'+item.id+'">x</button></span>');
+        liFrag.push('<span class="action text-right"><button class="btn-delete" data-todoID="'+i+'">x</button></span>');
         liFrag.push('</li>');
         var liSum = liFrag.reduce(function(a, b) {
           return a+b;
@@ -128,11 +115,14 @@
   })();
 
 
+
+
   app.todoController = {
     element: document.getElementById('listWrapper'),
 
     init: function() {
       this.bindActions(this.element);
+      app.todoView.render(app.todoCollection.getTodos());
     },
 
     bindActions: function(element) {
@@ -162,6 +152,11 @@
            }*/
         }
       }
+
+      document.getElementById('resetList').onclick = function(e) {
+        app.todoCollection.reset();
+        app.todoView.render(app.todoCollection.getTodos());
+      };
     },
 
     deleteTodo: function(el, wrapper) {
@@ -181,6 +176,7 @@
     addTodo: function() {
       var content = document.getElementById('todoAdd-content').value;
       var newTodo = new Todo(content);
+      console.log(newTodo);
       app.todoCollection.saveTodo(newTodo);
       document.getElementById('todoAdd-content').value = '';
       app.todoView.render(app.todoCollection.getTodos());
@@ -188,19 +184,6 @@
   };
 
   app.todoController.init();
-
-
-  console.log(app);
-
-
-  document.getElementById('resetList').onclick = function(e) {
-    app.todoCollection.reset();
-  };
-
-
-  app.todoView.render(app.todoCollection.getTodos());
-
-  console.log(app.todoCollection.getTodos());
 
 
 })();
