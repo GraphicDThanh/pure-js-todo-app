@@ -1,0 +1,158 @@
+/*##############    imports    ################ */
+@import url(http://fonts.googleapis.com/css?family=Open+Sans);
+
+
+/*##############    base    ################*/
+body {
+    margin: 0px;
+    padding: 0px;
+    font-family: 'Open Sans', Arial, Tahoma, Verdana, sans-serif;
+    font-size: 12px;
+}
+
+.wrapper {
+    margin: 0px;
+    width: 100%;
+    padding: 0px;
+}
+
+input {
+    padding: 0px 5px;
+    margin: 0px;
+}
+
+button {
+    cursor: pointer;
+}
+
+
+
+/*##############    layout    ################*/
+.container {
+    width: 1200px;
+    margin: 0 auto;
+}
+
+.center-wrapper {
+    text-align: center;
+}
+
+.center-content {
+    display: inline-block;
+}
+
+.list-nostyle {
+    list-style-type: none;
+    margin: 0px;
+    padding: 0px;
+}
+
+.list-nostyle li {
+    margin: 0px;
+    padding: 0px;
+    text-indent: 0px;
+}
+
+.text-left {
+   text-align: left;
+}
+
+.text-right {
+    text-align: right;
+}
+
+
+/*##############    modules    ################*/
+.logo-wrapper {
+    margin: 10px auto;
+}
+
+.todo-list {
+    width: 50%;
+}
+
+.todo-list li {
+    margin-bottom: 5px;
+    height: 38px;
+    padding: 2px;
+}
+
+.todo-list li span {
+    display: inline-block;
+}
+
+.todo-list li .li-content {
+    line-height: 36px;
+    width: 70%;
+}
+
+.todo-list li .checkbox {
+    float: left;
+    line-height: 36px;
+    width: 10%;
+}
+
+.todo-list li .action {
+    float: right;
+    width: 20%;
+}
+
+.todo-list input {
+    width: 100%;
+}
+
+.btn-delete {
+    border: 0px;
+    padding: 5px;
+    margin: 0px;
+    line-height: 26px;
+}
+
+.todo-lisr .li-indent {
+    margin-left: 40px;
+}
+
+/*##############    themes     ################*/
+.basic-list {
+
+}
+
+.basic-list li {
+    background: #FBFBFB;
+    font-size: 1.4em;
+}
+
+.btn-regular {
+    background: #009999;
+    border: 0px;
+    padding: 7px 14px;
+    color: #FFFFFF;
+    font-weight: 100;
+    font-size: 1.4em;
+}
+
+.input-regular {
+    line-height: 36px;
+    border: 1px solid #EAEAEA;
+    background: #FFFFFF;
+}
+
+.btn-delete {
+    background: none;
+    color: #B9B9B9;
+}
+
+
+/*##############    states     ################*/
+.basic-list li:hover {
+    background: #EEEEEE;
+}
+
+.todo-list .checked {
+    background: #EAEAEA;
+}
+
+.todo-list .checked .li-content{
+    text-decoration: line-through;
+    color: #C9C9C9;
+}
