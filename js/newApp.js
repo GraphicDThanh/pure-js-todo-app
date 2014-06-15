@@ -3,14 +3,15 @@
 (function () {
     'use strict';
 
-    var ServiceLocalStorage = function (queryName) { // Services for local storage. Easily replaced with custom service.
-            function get() {
-                return JSON.parse(localStorage.getItem(queryName)) || [];
-            }
+    var doc = document,
+        ServiceLocalStorage = function (queryName) { // Services for local storage. Easily replaceable with custom service.
+            var get = function () {
+                    return JSON.parse(localStorage.getItem(queryName)) || [];
+                },
 
-            function set(value) {
-                localStorage.setItem(queryName, JSON.stringify(value));
-            }
+                set = function (value) {
+                    localStorage.setItem(queryName, JSON.stringify(value));
+                };
 
             return {
                 get: get,
@@ -19,37 +20,37 @@
         },
 
         TodoCollection = function () { // Collection governs the data layer.
-            var todos;
+            var todos,
 
-            function deleteTodo(id) {
-                if (todos[id]) {
-                    todos.splice(id, 1);
-                }
-            }
+                deleteTodo = function (id) {
+                    if (todos[id]) {
+                        todos.splice(id, 1);
+                    }
+                },
 
-            function saveTodo(todo) {
-                var todoIndex = todos.indexOf(todo);
-                if (todoIndex < 0) {
-                    todos.push(todo);
-                } else {
-                    todos[todoIndex] = todo;
-                }
-            }
+                saveTodo = function (todo) {
+                    var todoIndex = todos.indexOf(todo);
+                    if (todoIndex < 0) {
+                        todos.push(todo);
+                    } else {
+                        todos[todoIndex] = todo;
+                    }
+                },
 
-            function init(data) {
-                todos = data;
-            }
+                init = function (data) {
+                    todos = data;
+                },
 
-            function getTodos() {
-                return todos;
-            }
+                getTodos = function () {
+                    return todos;
+                },
 
-            function getTodo(id) {
-                return todos[id] || {};
-            }
+                getTodo = function (id) {
+                    return todos[id] || {};
+                };
 
             return {
-                delete: deleteTodo,
+                deleteItem: deleteTodo,
                 getItems: getTodos,
                 getItem: getTodo,
                 save: saveTodo,
@@ -59,78 +60,79 @@
 
 
         TodoView = function (element) { // View renders and updates the UI
-            var $this = this;
+            var $this = this,
+
+                sum = function (a, b) {
+                    return a + b;
+                },
+
+                render = function (collection) {
+                    $this.element.innerHTML = '';
+                    var listFrag = doc.createDocumentFragment(); // create and attach to a document partial before inserting into DOM
+                    listFrag.innerHTML = '';
+
+                    for (var i = 0; i < collection.length; i++) {
+                        var item = collection[i];
+                        var checked = item.flag === false ? 'checked' : '';
+                        var liFrag = [];
+                        liFrag.push('<li class="'+ checked +'" data-todoID="'+i+'">');
+                        liFrag.push('<span class="checkbox"><input type="checkbox" '+ checked +' /></span>');
+                        liFrag.push('<span class="li-content text-left">'+item.content+'</span>');
+                        liFrag.push('<span class="action text-right"><button class="btn-delete" data-todoID="'+i+'">x</button></span>');
+                        liFrag.push('</li>');
+                        var liSum = liFrag.reduce(sum);
+                        listFrag.innerHTML += liSum;
+                    }
+
+                    element.innerHTML = listFrag.innerHTML; // insert into DOM only once per render
+                };
+
             this.element = element;
 
-            function render(collection) {
-                $this.element.innerHTML = '';
-                var listFrag = document.createDocumentFragment();
-                listFrag.innerHTML = '';
-
-                function sum(a, b) {
-                    return a + b;
-                }
-
-                for (var i = 0; i < collection.length; i++) {
-                    var item = collection[i];
-                    var checked = item.flag === false ? 'checked' : '';
-                    var liFrag = [];
-                    liFrag.push('<li class="'+ checked +'" data-todoID="'+i+'">');
-                    liFrag.push('<span class="checkbox"><input type="checkbox" '+ checked +' /></span>');
-                    liFrag.push('<span class="li-content text-left">'+item.content+'</span>');
-                    liFrag.push('<span class="action text-right"><button class="btn-delete" data-todoID="'+i+'">x</button></span>');
-                    liFrag.push('</li>');
-                    var liSum = liFrag.reduce(sum);
-                    listFrag.innerHTML += liSum;
-                }
-
-                element.innerHTML = listFrag.innerHTML;
-            }
-
             return {
-              render: render
+                render: render
             };
         },
 
 
-        TodoController = function() { // Controller is a mediator between services, collections and views
-            var modules = {};
+        TodoController = function() { // Controller is a facade for services, collections and views
+            var modules = {},
 
-            function register(module, type) {
-               modules[type] = module;
-            }
+                register = function (module, type) {
+                   modules[type] = module;
+                },
 
-            function render () {
-                modules.collection.init(modules.service.get());
-                modules.view.render(modules.collection.getItems());
-            }
+                render = function () {
+                    modules.collection.init(modules.service.get());
+                    modules.view.render(modules.collection.getItems());
+                },
 
-            function deleteEvent(id) {
-                modules.collection.delete(id);
-                syncState();
-            }
+                deleteItem = function (id) {
+                    modules.collection.deleteItem(id);
+                    syncState();
+                },
 
-            function save(todo) {
-                modules.collection.save(todo);
-                syncState();
-            }
+                save = function (todo) {
+                    modules.collection.save(todo);
+                    syncState();
+                },
 
-            function toggle(id) {
-                var todo = modules.collection.getItem(id);
-                todo.flag = !todo.flag;
-                modules.collection.save(todo);
-                syncState();
-            }
+                toggle = function (id) {
+                    var todo = modules.collection.getItem(id);
+                    todo.flag = !todo.flag;
+                    modules.collection.save(todo);
+                    syncState();
+                },
 
-            function syncState() {
-                var todos = modules.collection.getItems();
-                modules.service.set(todos);
-                modules.view.render(todos);
-            }
+                syncState = function () {
+                    var todos = modules.collection.getItems();
+                    modules.service.set(todos);
+                    modules.view.render(todos);
+                };
 
             return {
                 render: render,
-                delete: deleteEvent,
+                deleteItem: deleteItem,
                 save: save,
                 register: register,
                 toggle: toggle
@@ -144,34 +146,36 @@
         },
 
 
-        TodoEvents = function (element, controller) {
+        TodoEvents = function (element, controller) { // UI events are delegated to subelements of the wrapper for easy reattaching
             element.onclick = function (e) {
-                var el = e.target;
-                var wrapper = el.parentNode.parentNode;
-                var todoId = wrapper.dataset.todoid || null;
+                var el = e.target,
+                    wrapper = el.parentNode.parentNode,
+                    todoId = wrapper.dataset.todoid || null;
 
                 if (el) {
                     if (el.classList.contains('btn-delete')) {
-                        controller.delete(todoId);
+                        controller.deleteItem(todoId);
                     }
                     if (el.type === 'checkbox') {
                         controller.toggle(todoId);
                     }
                     if (el.id === 'todoAdd') {
-                        var content = document.getElementById('todoAdd-content').value;
-                        var newTodo = new TodoModel(content);
+                        var contentElement = doc.getElementById('todoAdd-content'),
+                            newTodo = new TodoModel(contentElement.value);
                         controller.save(newTodo);
+                        contentElement.value = '';
                     }
                 }
             };
-        };
+        },
 
 
-    var todoController = new TodoController();
-    var todoView = new TodoView(document.getElementById('todoList'));
-    var todoCollection = new TodoCollection();
-    var serviceLocalStorage = new ServiceLocalStorage('todos');
-    var todoEvents = new TodoEvents(document.getElementById('listWrapper'), todoController);
+
+    var todoController = new TodoController(),
+        todoView = new TodoView(doc.getElementById('todoList')),
+        todoCollection = new TodoCollection(),
+        serviceLocalStorage = new ServiceLocalStorage('todos'),
+        todoEvents = new TodoEvents(doc.getElementById('listWrapper'), todoController);
 
     todoController.register(todoView, 'view');
     todoController.register(todoCollection, 'collection');
