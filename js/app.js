@@ -2,6 +2,8 @@
 
 /*
     PLEASE NOTE: decided not to divide the code across multiple files for easier reading.
+    Author: Aleksander Sekowski
+    2014
  */
 
 (function () {
