@@ -1,189 +1,281 @@
-(function() {
+/*global localStorage: false, console: false, document: false */
 
-  var app = window.app || {};
+(function () {
+    'use strict';
 
-  app.todoCollection = (function () {
-    var _this = this;
+    var doc = document, // Reference global object
+        ServiceLocalStorage = function (queryName) { // Services plugin for local storage. Easily replaceable with custom service.
+            var get = function () {
+                    return JSON.parse(localStorage.getItem(queryName)) || [];
+                },
 
-    function getTodos() {
-      var collection = JSON.parse(localStorage.getItem('todoCollection'));
-      if (collection) {
-        _this.todos = collection;
-      };
-      logState();
-      return _this.todos;
-    };
+                set = function (value) {
+                    localStorage.setItem(queryName, JSON.stringify(value));
+                };
 
-    function getTodo(id) {
-      var todos = _this.todos;
-      if (todos[id]) {
-        return todos[id];
-      } else {
-        return {};
-      }
-    }
-
-    function deleteTodo(id) {
-      var todos = _this.todos;
-      var deleteTodo = getTodo(id);
-      todos.splice(todos.indexOf(deleteTodo), 1);
-      sync();
-      //logState();
-    };
-
-    function saveTodo(model) {
-      var todos = _this.todos;
-      if (todos.indexOf(model) < 0) {
-        todos.push(model);
-      } else {
-        todos[todos.indexOf(model)] = model;
-      }
-      sync();
-      //logState();
-    }
-
-    function sync() {
-      localStorage.setItem('todoCollection', JSON.stringify(_this.todos));
-    }
-
-    function logState() {
-      console.log(localStorage.getItem('todoCollection'));
-    }
-
-    function reset() {
-      _this.todos = [
-        /*{id: 1, content: 'Todo nr 1', flag: true},
-        {id: 2, content: 'Todo nr 2', flag: true},
-        {id: 3, content: 'Todo nr 3', flag: true}*/
-      ];
-      sync();
-     //logState();
-    }
-
-    getTodos();
-    return {
-      getTodos: getTodos,
-      getTodo: getTodo,
-      deleteTodo: deleteTodo,
-      saveTodo: saveTodo,
-      reset: reset
-    };
-
-  })();
+            return {
+                get: get,
+                set: set
+            };
+        },
 
 
+        TodoModel = function (content, flag) { // Basic Todo model
+            this.content = content || '';
+            this.flag = typeof flag === 'boolean' ? flag : true;
+        },
 
 
-  Todo = function(content) {
-    this.content = content || '',
-    this.flag = 'active'
-  };
+        TodoCollection = function (sandbox) { // Collection governs the data layer.
+            var todos,
+
+                deleteTodo = function (id) {
+                    if (todos[id]) {
+                        todos.splice(id, 1);
+                    }
+                    sandbox.publish('dataChange');
+                },
+
+                updateTodo = function (args) {
+                    if (args.index < 0) {
+                        todos.push(args.todo);
+                    } else {
+                        todos[args.index] = args.todo;
+                    }
+                    sandbox.publish('dataChange');
+                },
+
+                saveTodo = function (todo) {
+                    var todoIndex = todos.indexOf(todo);
+                    updateTodo({todo: todo, index: todoIndex});
+                },
+
+                toggleTodo = function (todo) {
+                    var todoIndex = todos.indexOf(todo),
+                        updatedTodo = new TodoModel(todo.content, !todo.flag);
+                    updateTodo({todo: updatedTodo, index: todoIndex});
+                },
+
+                reset = function () {
+                    todos = [];
+                    sandbox.publish('dataChange');
+                },
+
+                subComp = function (item) {
+                    return item.flag === true;
+                },
+
+                removeCompleted = function () {
+                    var arr = todos;
+                    todos  = arr.filter(subComp);
+                    sandbox.publish('dataChange');
+                },
+
+                init = function (data) {
+                    todos = data;
+                    sandbox.publish('dataChange');
+                },
+
+                getTodos = function () {
+                    return todos;
+                },
+
+                getTodo = function (id) {
+                    return todos[id] || {};
+                };
+
+            return {
+                deleteItem: deleteTodo,
+                getItems: getTodos,
+                getItem: getTodo,
+                save: saveTodo,
+                update: updateTodo,
+                toggle: toggleTodo,
+                reset: reset,
+                removeCompleted: removeCompleted,
+                init: init
+            };
+        },
+
+
+        TodoView = function (element, sandbox) { // View renders and updates the UI
+            this.element = element;
+            var $this = this,
+
+                sum = function (a, b) {
+                    return a + b;
+                },
+
+                render = function (collection) {
+                    var listEl = $this.element.getElementsByTagName('ul')[0],
+                        listFrag = doc.createDocumentFragment(); // Create and attach to a document partial before inserting into DOM
+
+                    listEl.innerHTML = '';
+                    listFrag.innerHTML = '';
+
+                    for (var i = 0; i < collection.length; i++) {
+                        var item = collection[i];
+                        var checked = item.flag === false ? 'checked' : '';
+                        var liFrag = [];
+                        liFrag.push('<li class="'+ checked +'" data-todoID="'+i+'">');
+                        liFrag.push('<span class="checkbox"><input type="checkbox" '+ checked +' /></span>');
+                        liFrag.push('<span class="li-content text-left" title="double click to edit">'+item.content+'</span>');
+                        liFrag.push('<span class="action text-right"><button class="btn-delete" data-todoID="'+i+'">x</button></span>');
+                        liFrag.push('</li>');
+                        listFrag.innerHTML += liFrag.reduce(sum);
+                    }
+
+                    listEl.innerHTML = listFrag.innerHTML; // Insert into DOM only once per render
+                },
+
+                escapeHTML = function(content) { // Use this to remove HTML tags from input
+                    var regex = /((<)|(>))/ig;
+                    return content.replace(regex, "");
+                },
+
+                restoreTodo = function(input, index) {
+                    var editedTodo = new TodoModel(escapeHTML(input.value), true);
+                    sandbox.publish('todoEdit', {todo: editedTodo, index: index});
+                },
+
+                addTodo = function() {
+                    var content = doc.getElementById('todoAdd-content').value;
+                    doc.getElementById('todoAdd-content').value = '';
+                    if (content.length > 0) {
+                        sandbox.publish('todoAdd', new TodoModel(escapeHTML(content), true));
+                    }
+                },
+
+                bindActions = function() {
+                    $this.element.addEventListener('click', function (e) {  // Delegate the events so we do not have to reattach on updates
+                        var el = e.target,
+                            todoId = el.parentNode.parentNode.dataset.todoid;
+
+                        if (el) {
+                            if (el.classList.contains('btn-delete')) { // single click actions on wrapper
+                                sandbox.publish('todoRemove', todoId);
+                            }
+                            if (el.type === 'checkbox') {
+                                sandbox.publish('toggleState', todoId);
+                            }
+                            if (el.id === 'todoAdd') {
+                                addTodo();
+                            }
+                            if (el.id === 'resetList') {
+                                sandbox.publish('resetTodos');
+                            }
+                            if (el.id == 'removeCompleted') {
+                                sandbox.publish('removeCompleted');
+                            }
+                        }
+                    });
+
+                    $this.element.addEventListener('dblclick', function (e) { // edit on double click
+                        var el = e.target;
+
+                        if (el.classList.contains('li-content')) {
+                            if (el.getElementsByTagName('input')[0]) {return};
+                            var id = el.parentNode.dataset.todoid,
+                                currContent = el.innerHTML;
+
+                            el.innerHTML = '<input type="text" class="input-regular" value="'+currContent+'" />';
+                            var input = el.getElementsByTagName('input')[0];
+                            input.focus();
+
+                            input.addEventListener("blur", function() {
+                                restoreTodo(input, id);
+                            });
+                            input.addEventListener("keydown", function(e) {
+                                if (e.keyCode === 13) {
+                                    restoreTodo(input, id);
+                                }
+                            });
+                        }
+                    });
+
+                    $this.element.addEventListener('keydown', function (e) { // add todo on pressing enter
+                        if (e.target.id === 'todoAdd-content' && e.keyCode === 13) {
+                            addTodo();
+                        }
+                    });
+                };
+
+            bindActions();
+            return {
+                render: render
+            };
+        },
+
+
+        TodoSandbox = function() { // This is a sandbox for the application, which takes form of a simple publish / subscribe pattern
+            this.topics = [];
+            var $this = this,
+                subscribe = function(topic, module, func, args) {
+                    if ($this.topics[topic]) {
+                        $this.topics[topic].push({module: module, func: func, args: args});
+                    } else {
+                        $this.topics[topic] = new Array({module: module, func: func, args: args});
+                    }
+                },
+
+                unsub = function(topic, module) {
+                    var subscribers = $this.topics[topic] || [];
+                    if (subscribers.length > 0) {
+                        for (var i = 0; i < subscribers.length; i++) {
+                            if (subscribers[i].module === module) {
+                                subscribers.splice(i, 1);
+                            }
+                        }
+                    }
+                },
+
+                publish = function(topic, args) {
+                    var subscribers = $this.topics[topic] || [];
+                    if (subscribers.length > 0) {
+                        for (var i = 0; i < subscribers.length; i++) {
+                            if (typeof subscribers[i].args == 'function') {
+                                subscribers[i].func(subscribers[i].args(args));
+                            } else {
+                                subscribers[i].func(args);
+                            }
+                        }
+                    }
+                };
+
+            return {
+                subscribe: subscribe,
+                unsub: unsub,
+                publish: publish
+            };
+        };
 
 
 
-
-  app.todoView = (function() {
-    var _this = this;
-    this.element = document.getElementById('todoList');
-
-    this.render = function(collection) {
-      _this.element.innerHTML = '';
-      var listFrag = document.createDocumentFragment();
-      listFrag.innerHTML = '';
-
-      for (var i = 0; i < collection.length; i++) {
-        var item = collection[i];
-        var checked = item.flag == false ? 'checked' : '';
-        var liFrag = [];
-        liFrag.push('<li class="'+ checked +'" data-todoID="'+i+'">');
-        liFrag.push('<span class="checkbox"><input type="checkbox" '+ checked +' /></span>');
-        liFrag.push('<span class="li-content text-left">'+item.content+'</span>');
-        liFrag.push('<span class="action text-right"><button class="btn-delete" data-todoID="'+i+'">x</button></span>');
-        liFrag.push('</li>');
-        var liSum = liFrag.reduce(function(a, b) {
-          return a+b;
-        });
-        listFrag.innerHTML += liSum;
-      }
-
-      element.innerHTML = listFrag.innerHTML;
-    };
-
-    return {
-      render: render
-    }
-  })();
+    // Initialise all modules
+    var todoSandbox = new TodoSandbox(),
+        todoView = new TodoView(doc.getElementById('listWrapper'), todoSandbox),
+        todoCollection = new TodoCollection(todoSandbox),
+        serviceLocalStorage = new ServiceLocalStorage('todos');
 
 
 
+    // General purpose subscriptions
+    todoSandbox.subscribe('init', todoCollection, todoCollection.init, serviceLocalStorage.get);
+    todoSandbox.subscribe('dataChange', serviceLocalStorage, serviceLocalStorage.set, todoCollection.getItems);
+    todoSandbox.subscribe('dataChange', todoView, todoView.render, todoCollection.getItems);
+    // Subscriptions for mutating items
+    todoSandbox.subscribe('toggleState', todoCollection, todoCollection.toggle, function(args) {
+        return todoCollection.getItem(args);
+    });
+    todoSandbox.subscribe('todoRemove', todoCollection, todoCollection.deleteItem);
+    todoSandbox.subscribe('todoAdd', todoCollection, todoCollection.save);
+    todoSandbox.subscribe('todoEdit', todoCollection, todoCollection.update);
+    todoSandbox.subscribe('resetTodos', todoCollection, todoCollection.reset);
+    todoSandbox.subscribe('removeCompleted', todoCollection, todoCollection.removeCompleted);
 
-  app.todoController = {
-    element: document.getElementById('listWrapper'),
 
-    init: function() {
-      this.bindActions(this.element);
-      app.todoView.render(app.todoCollection.getTodos());
-    },
 
-    bindActions: function(element) {
-      var _this = this;
-
-      element.onclick = function(e) {
-        var el = e.target;
-        var wrapper = el.parentNode.parentNode;
-
-        if (el) {
-          if (el.classList.contains('btn-delete')) {
-            _this.deleteTodo(el, wrapper)
-          }
-          if (el.type === 'checkbox') {
-            _this.updateTodoState(el, wrapper);
-          }
-          if (el.id === 'todoAdd') {
-            _this.addTodo();
-          }
-          /*if (el.classList.contains('li-content')) {
-           var currentContent = el.innerHTML;
-           el.innerHTML = '<input type="text" class="input-regular" value="'+currentContent+'" />';
-           return;
-           }
-           if (el.classList.contains('input-regular')) {
-           return;
-           }*/
-        }
-      }
-
-      document.getElementById('resetList').onclick = function(e) {
-        app.todoCollection.reset();
-        app.todoView.render(app.todoCollection.getTodos());
-      };
-    },
-
-    deleteTodo: function(el, wrapper) {
-      var todoId = wrapper.dataset.todoid;
-      app.todoCollection.deleteTodo(todoId);
-      app.todoView.render(app.todoCollection.getTodos());
-    },
-
-    updateTodoState: function(el, wrapper) {
-      var todoId = wrapper.dataset.todoid;
-      var updatedTodo = app.todoCollection.getTodo(todoId);
-      updatedTodo.flag = !updatedTodo.flag;
-      app.todoCollection.saveTodo(updatedTodo);
-      app.todoView.render(app.todoCollection.getTodos());
-    },
-
-    addTodo: function() {
-      var content = document.getElementById('todoAdd-content').value;
-      var newTodo = new Todo(content);
-      console.log(newTodo);
-      app.todoCollection.saveTodo(newTodo);
-      document.getElementById('todoAdd-content').value = '';
-      app.todoView.render(app.todoCollection.getTodos());
-    }
-  };
-
-  app.todoController.init();
-
+    //Kick off the app
+    todoSandbox.publish('init');
 
 })();
