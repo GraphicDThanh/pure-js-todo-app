@@ -1,9 +1,14 @@
 /*global localStorage: false, console: false, document: false */
 
+/*
+    PLEASE NOTE: decided not to divide the code across multiple files for easier reading.
+ */
+
 (function () {
     'use strict';
 
     var doc = document, // Reference global object
+        win = window,
         ServiceLocalStorage = function (queryName) { // Services plugin for local storage. Easily replaceable with custom service.
             var get = function () {
                     return JSON.parse(localStorage.getItem(queryName)) || [];
@@ -121,7 +126,7 @@
                         liFrag.push('<span class="li-content text-left" title="double click to edit">'+item.content+'</span>');
                         liFrag.push('<span class="action text-right"><button class="btn-delete" data-todoID="'+i+'">x</button></span>');
                         liFrag.push('</li>');
-                        listFrag.innerHTML += liFrag.reduce(sum);
+                        listFrag.innerHTML += typeof liFrag.reduce === 'function' ? liFrag.reduce(sum) : liFrag[0] + liFrag[1] +liFrag[2] +liFrag[3] +liFrag[4];
                     }
 
                     listEl.innerHTML = listFrag.innerHTML; // Insert into DOM only once per render
@@ -145,57 +150,67 @@
                     }
                 },
 
-                bindActions = function() {
-                    $this.element.addEventListener('click', function (e) {  // Delegate the events so we do not have to reattach on updates
-                        var el = e.target,
-                            todoId = el.parentNode.parentNode.dataset.todoid;
+                singleClickActions = function (e) {
+                    var el = e.target,
+                    todoId = el.parentNode.parentNode.getAttribute('data-todoID');
 
-                        if (el) {
-                            if (el.classList.contains('btn-delete')) { // single click actions on wrapper
-                                sandbox.publish('todoRemove', todoId);
-                            }
-                            if (el.type === 'checkbox') {
-                                sandbox.publish('toggleState', todoId);
-                            }
-                            if (el.id === 'todoAdd') {
-                                addTodo();
-                            }
-                            if (el.id === 'resetList') {
-                                sandbox.publish('resetTodos');
-                            }
-                            if (el.id == 'removeCompleted') {
-                                sandbox.publish('removeCompleted');
-                            }
+                    if (el) {
+                        if (el.className.indexOf('delete') > -1) { // single click actions on wrapper
+                            sandbox.publish('todoRemove', todoId);
                         }
-                    });
-
-                    $this.element.addEventListener('dblclick', function (e) { // edit on double click
-                        var el = e.target;
-
-                        if (el.classList.contains('li-content')) {
-                            if (el.getElementsByTagName('input')[0]) {return};
-                            var id = el.parentNode.dataset.todoid,
-                                currContent = el.innerHTML;
-
-                            el.innerHTML = '<input type="text" class="input-regular" value="'+currContent+'" />';
-                            var input = el.getElementsByTagName('input')[0];
-                            input.focus();
-
-                            input.addEventListener("blur", function() {
-                                restoreTodo(input, id);
-                            });
-                            input.addEventListener("keydown", function(e) {
-                                if (e.keyCode === 13) {
-                                    restoreTodo(input, id);
-                                }
-                            });
+                        if (el.type === 'checkbox') {
+                            sandbox.publish('toggleState', todoId);
                         }
-                    });
-
-                    $this.element.addEventListener('keydown', function (e) { // add todo on pressing enter
-                        if (e.target.id === 'todoAdd-content' && e.keyCode === 13) {
+                        if (el.id === 'todoAdd') {
                             addTodo();
                         }
+                        if (el.id === 'resetList') {
+                            sandbox.publish('resetTodos');
+                        }
+                        if (el.id == 'removeCompleted') {
+                            sandbox.publish('removeCompleted');
+                        }
+                    }
+                },
+
+                dblClickActions = function(e) {
+                    var el = e.target;
+
+                    if (el.className.indexOf('li-content') > -1) {
+                        if (el.getElementsByTagName('input')[0]) {return};
+                        var id = el.parentNode.getAttribute('data-todoID'),
+                            currContent = el.innerHTML;
+
+                        el.innerHTML = '<input type="text" class="input-regular" value="'+currContent+'" />';
+                        var input = el.getElementsByTagName('input')[0];
+                        input.focus();
+
+                        input.addEventListener("blur", function() {
+                            restoreTodo(input, id);
+                        });
+                        input.addEventListener("keydown", function(e) {
+                            if (e.keyCode === 13) {
+                                restoreTodo(input, id);
+                            }
+                        });
+                    }
+                },
+
+                keyDownActions = function(e) {
+                    if (e.target.id === 'todoAdd-content' && e.keyCode === 13) {
+                        addTodo();
+                    }
+                },
+
+                bindActions = function() {
+                    $this.element.addEventListener('click', function (e) {  // Delegate the events so we do not have to reattach on updates
+                        singleClickActions(e);
+                    });
+                    $this.element.addEventListener('dblclick', function (e) { // edit on double click
+                        dblClickActions(e);
+                    });
+                    $this.element.addEventListener('keydown', function (e) { // add todo on pressing enter
+                        keyDownActions(e);
                     });
                 };
 
@@ -232,7 +247,7 @@
                     var subscribers = $this.topics[topic] || [];
                     if (subscribers.length > 0) {
                         for (var i = 0; i < subscribers.length; i++) {
-                            if (typeof subscribers[i].args == 'function') {
+                            if (typeof subscribers[i].args === 'function') {
                                 subscribers[i].func(subscribers[i].args(args));
                             } else {
                                 subscribers[i].func(args);
