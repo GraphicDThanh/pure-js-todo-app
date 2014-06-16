@@ -66,8 +66,7 @@
                 },
 
                 removeCompleted = function () {
-                    var arr = todos;
-                    todos  = arr.filter(subComp);
+                    todos = todos.filter(subComp);
                     sandbox.publish('dataChange');
                 },
 

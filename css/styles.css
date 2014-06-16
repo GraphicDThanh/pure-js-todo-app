@@ -61,6 +61,18 @@ button {
     text-align: right;
 }
 
+.col-half {
+    width: 50%;
+}
+
+header.wrapper {
+    padding: 20px 0 20px;
+}
+
+footer.wrapper {
+    padding-top: 50px;
+}
+
 
 /*##############    modules    ################*/
 .logo-wrapper {
@@ -68,7 +80,6 @@ button {
 }
 
 .todo-list {
-    width: 50%;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     -khtml-user-select: none;
@@ -118,6 +129,10 @@ button {
     margin-left: 40;
 }
 
+.wrapper-content {
+    min-height: 500px;
+}
+
 /*##############    themes     ################*/
 
 .basic-list li {
@@ -144,6 +159,10 @@ button {
 .btn-delete {
     background: none;
     color: #B9B9B9;
+}
+
+.disclaimer {
+    color: #CACACA;
 }
 
 
