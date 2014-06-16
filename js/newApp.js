@@ -4,7 +4,7 @@
     'use strict';
 
     var doc = document,
-        ServiceLocalStorage = function (queryName) { // Services for local storage. Easily replaceable with custom service.
+        ServiceLocalStorage = function (queryName) {    // Services for local storage. Easily replaceable with custom service.
             var get = function () {
                     return JSON.parse(localStorage.getItem(queryName)) || [];
                 },
@@ -19,7 +19,14 @@
             };
         },
 
-        TodoCollection = function () { // Collection governs the data layer.
+
+        TodoModel = function (content, flag) {      // Basic Todo model
+            this.content = content || '';
+            this.flag = flag || true;
+        },
+
+
+        TodoCollection = function () {      // Collection governs the data layer.
             var todos,
 
                 deleteTodo = function (id) {
@@ -54,12 +61,13 @@
                 getItems: getTodos,
                 getItem: getTodo,
                 save: saveTodo,
-                init: init
+                init: init,
+                todos: todos
             };
         },
 
 
-        TodoView = function (element) { // View renders and updates the UI
+        TodoView = function (element) {     // View renders and updates the UI
             var $this = this,
 
                 sum = function (a, b) {
@@ -68,23 +76,25 @@
 
                 render = function (collection) {
                     $this.element.innerHTML = '';
-                    var listFrag = doc.createDocumentFragment(); // create and attach to a document partial before inserting into DOM
+                    var listFrag = doc.createDocumentFragment();    // create and attach template to a document partial before inserting into DOM
                     listFrag.innerHTML = '';
 
                     for (var i = 0; i < collection.length; i++) {
-                        var item = collection[i];
-                        var checked = item.flag === false ? 'checked' : '';
-                        var liFrag = [];
+                        var item = collection[i],
+                            checked = item.flag === false ? 'checked' : '',
+                            liFrag = [],
+                            liSum;
+
                         liFrag.push('<li class="'+ checked +'" data-todoID="'+i+'">');
                         liFrag.push('<span class="checkbox"><input type="checkbox" '+ checked +' /></span>');
                         liFrag.push('<span class="li-content text-left">'+item.content+'</span>');
                         liFrag.push('<span class="action text-right"><button class="btn-delete" data-todoID="'+i+'">x</button></span>');
                         liFrag.push('</li>');
-                        var liSum = liFrag.reduce(sum);
+                        liSum = liFrag.reduce(sum);    // a rather rudimentary template
                         listFrag.innerHTML += liSum;
                     }
 
-                    element.innerHTML = listFrag.innerHTML; // insert into DOM only once per render
+                    element.innerHTML = listFrag.innerHTML;     // insert into DOM only once per render
                 };
 
             this.element = element;
@@ -95,7 +105,7 @@
         },
 
 
-        TodoController = function() { // Controller is a facade for services, collections and views
+        TodoSandbox = function() {      // Sandbox for communication between view, services and collection
             var modules = {},
 
                 register = function (module, type) {
@@ -124,7 +134,7 @@
                     syncState();
                 },
 
-                syncState = function () {
+                syncState = function () {   // facade for updating the display
                     var todos = modules.collection.getItems();
                     modules.service.set(todos);
                     modules.view.render(todos);
@@ -135,18 +145,12 @@
                 deleteItem: deleteItem,
                 save: save,
                 register: register,
-                toggle: toggle
+                toggle: toggle,
             };
         },
 
 
-        TodoModel = function (content, flag) { // Basic Todo model
-            this.content = content || '';
-            this.flag = flag || true;
-        },
-
-
-        TodoEvents = function (element, controller) { // UI events are delegated to subelements of the wrapper for easy reattaching
+        TodoEvents = function (element, controller) {   // UI events are delegated to sub-elements of the wrapper for easy reattaching
             element.onclick = function (e) {
                 var el = e.target,
                     wrapper = el.parentNode.parentNode,
@@ -171,16 +175,19 @@
 
 
 
-    var todoController = new TodoController(),
-        todoView = new TodoView(doc.getElementById('todoList')),
+    var listEl = doc.getElementById('todoList'),
+        wrapperEl = doc.getElementById('listWrapper'),
+        todoSandbox = new TodoSandbox(),
+        todoView = new TodoView(listEl),
         todoCollection = new TodoCollection(),
-        serviceLocalStorage = new ServiceLocalStorage('todos'),
-        todoEvents = new TodoEvents(doc.getElementById('listWrapper'), todoController);
+        serviceLocalStorage = new ServiceLocalStorage('todos'),   // todos is simply a label by which we retrieve the data from local storage
+        todoEvents = new TodoEvents(wrapperEl, todoSandbox);
 
-    todoController.register(todoView, 'view');
-    todoController.register(todoCollection, 'collection');
-    todoController.register(serviceLocalStorage, 'service');
+    todoSandbox.register(todoView, 'view');
+    todoSandbox.register(todoCollection, 'collection');
+    todoSandbox.register(serviceLocalStorage, 'service');
 
-    todoController.render();
+    todoSandbox.render();
+
 
 })();
