@@ -3,7 +3,7 @@
 (function () {
     'use strict';
 
-    var doc = document, // reference global object
+    var doc = document, // Reference global object
         ServiceLocalStorage = function (queryName) { // Services plugin for local storage. Easily replaceable with custom service.
             var get = function () {
                     return JSON.parse(localStorage.getItem(queryName)) || [];
@@ -26,41 +26,53 @@
         },
 
 
-        TodoCollection = function (observer) { // Collection governs the data layer.
+        TodoCollection = function (sandbox) { // Collection governs the data layer.
             var todos,
 
                 deleteTodo = function (id) {
-                    console.log('deleting' + id);
                     if (todos[id]) {
                         todos.splice(id, 1);
                     }
-                    observer.publish('dataChange');
+                    sandbox.publish('dataChange');
+                },
+
+                updateTodo = function (args) {
+                    if (args.index < 0) {
+                        todos.push(args.todo);
+                    } else {
+                        todos[args.index] = args.todo;
+                    }
+                    sandbox.publish('dataChange');
                 },
 
                 saveTodo = function (todo) {
                     var todoIndex = todos.indexOf(todo);
-                    if (todoIndex < 0) {
-                        todos.push(todo);
-                    } else {
-                        todos[todoIndex] = todo;
-                    }
-                    observer.publish('dataChange');
+                    updateTodo({todo: todo, index: todoIndex});
                 },
 
                 toggleTodo = function (todo) {
                     var todoIndex = todos.indexOf(todo),
                         updatedTodo = new TodoModel(todo.content, !todo.flag);
-                    if (todoIndex < 0) {
-                        todos.push(updatedTodo);
-                    } else {
-                        todos[todoIndex] = updatedTodo;
+                    updateTodo({todo: updatedTodo, index: todoIndex});
+                },
+
+                reset = function () {
+                    todos = [];
+                    sandbox.publish('dataChange');
+                },
+
+                removeCompleted = function () {
+                    var arr = todos;
+                    function subComp(item) {
+                        return item.flag === true;
                     }
-                    observer.publish('dataChange');
+                    todos  = arr.filter(subComp);
+                    sandbox.publish('dataChange');
                 },
 
                 init = function (data) {
                     todos = data;
-                    observer.publish('dataChange');
+                    sandbox.publish('dataChange');
                 },
 
                 getTodos = function () {
@@ -76,13 +88,16 @@
                 getItems: getTodos,
                 getItem: getTodo,
                 save: saveTodo,
+                update: updateTodo,
                 toggle: toggleTodo,
+                reset: reset,
+                removeCompleted: removeCompleted,
                 init: init
             };
         },
 
 
-        TodoView = function (element, observer) { // View renders and updates the UI
+        TodoView = function (element, sandbox) { // View renders and updates the UI
             this.element = element;
             var $this = this,
 
@@ -92,7 +107,7 @@
 
                 render = function (collection) {
                     var listEl = $this.element.getElementsByTagName('ul')[0],
-                        listFrag = doc.createDocumentFragment(); // create and attach to a document partial before inserting into DOM
+                        listFrag = doc.createDocumentFragment(); // Create and attach to a document partial before inserting into DOM
 
                     listEl.innerHTML = '';
                     listFrag.innerHTML = '';
@@ -109,25 +124,61 @@
                         listFrag.innerHTML += liFrag.reduce(sum);
                     }
 
-                    listEl.innerHTML = listFrag.innerHTML; // insert into DOM only once per render
+                    listEl.innerHTML = listFrag.innerHTML; // Insert into DOM only once per render
+                },
+
+                escapeHTML = function(content) { // Use this to remove HTML tags from input
+                    var regex = /(<([^>]+)>)/ig;
+                    return content.replace(regex, "");
+                },
+
+                restoreTodo = function(input, index) {
+                    var editedTodo = new TodoModel(escapeHTML(input.value), true);
+                    sandbox.publish('todoEdit', {todo: editedTodo, index: index});
                 },
 
                 bindActions = function() {
-                    $this.element.onclick = function (e) { // delegate the events so we do not have to reattach on updates
+                    $this.element.onclick = function (e) { // Delegate the events so we do not have to reattach on updates
                         var el = e.target,
-                            wrapper = el.parentNode.parentNode,
-                            todoId = wrapper.dataset.todoid;
+                            todoId = el.parentNode.parentNode.dataset.todoid;
 
                         if (el) {
                             if (el.classList.contains('btn-delete')) {
-                                observer.publish('todoRemove', todoId);
+                                sandbox.publish('todoRemove', todoId);
                             }
                             if (el.type === 'checkbox') {
-                                observer.publish('toggleState', todoId);
+                                sandbox.publish('toggleState', todoId);
                             }
                             if (el.id === 'todoAdd') {
                                 var content = doc.getElementById('todoAdd-content').value;
-                                observer.publish('todoAdd', new TodoModel(content, true));
+                                doc.getElementById('todoAdd-content').value = '';
+                                if (content.length > 0) {
+                                    sandbox.publish('todoAdd', new TodoModel(escapeHTML(content), true));
+                                }
+                            }
+                            if (el.id === 'resetList') {
+                                sandbox.publish('resetTodos');
+                            }
+                            if (el.id == 'removeCompleted') {
+                                sandbox.publish('removeCompleted');
+                            }
+                            if (el.classList.contains('li-content')) {
+                                if (el.getElementsByTagName('input')[0]) {return};
+                                var id = el.parentNode.dataset.todoid,
+                                    currContent = el.innerHTML;
+
+                                el.innerHTML = '<input type="text" class="input-regular" value="'+currContent+'" />';
+                                var input = el.getElementsByTagName('input')[0];
+                                input.focus();
+
+                                input.addEventListener("blur", function() {
+                                    restoreTodo(input, id);
+                                });
+                                input.addEventListener("keydown", function(e) {
+                                    if (e.keyCode === 13) {
+                                        restoreTodo(input, id);
+                                    }
+                                });
                             }
                         }
                     };
@@ -140,7 +191,7 @@
         },
 
 
-        TodoObserver = function() { // This is a sandbox for the application, which takes form of a simple publish / subscribe pattern
+        TodoSandbox = function() { // This is a sandbox for the application, which takes form of a simple publish / subscribe pattern
             this.topics = [];
             var $this = this,
                 subscribe = function(topic, module, func, args) {
@@ -184,24 +235,29 @@
 
 
     // Initialise all modules
-    var todoObserver = new TodoObserver(),
-        todoView = new TodoView(doc.getElementById('listWrapper'), todoObserver),
-        todoCollection = new TodoCollection(todoObserver),
+    var todoSandbox = new TodoSandbox(),
+        todoView = new TodoView(doc.getElementById('listWrapper'), todoSandbox),
+        todoCollection = new TodoCollection(todoSandbox),
         serviceLocalStorage = new ServiceLocalStorage('todos');
 
 
-    // Register all subscriptions
-    todoObserver.subscribe('init', todoCollection, todoCollection.init, serviceLocalStorage.get);
-    todoObserver.subscribe('dataChange', serviceLocalStorage, serviceLocalStorage.set, todoCollection.getItems);
-    todoObserver.subscribe('dataChange', todoView, todoView.render, todoCollection.getItems);
-    todoObserver.subscribe('toggleState', todoCollection, todoCollection.toggle, function(args) {
+    // General purpose subscriptions
+    todoSandbox.subscribe('init', todoCollection, todoCollection.init, serviceLocalStorage.get);
+    todoSandbox.subscribe('dataChange', serviceLocalStorage, serviceLocalStorage.set, todoCollection.getItems);
+    todoSandbox.subscribe('dataChange', todoView, todoView.render, todoCollection.getItems);
+    // Subscriptions for mutating items
+    todoSandbox.subscribe('toggleState', todoCollection, todoCollection.toggle, function(args) {
         return todoCollection.getItem(args);
     });
-    todoObserver.subscribe('todoRemove', todoCollection, todoCollection.deleteItem);
-    todoObserver.subscribe('todoAdd', todoCollection, todoCollection.save);
+    todoSandbox.subscribe('todoRemove', todoCollection, todoCollection.deleteItem);
+    todoSandbox.subscribe('todoAdd', todoCollection, todoCollection.save);
+    todoSandbox.subscribe('todoEdit', todoCollection, todoCollection.update);
+    todoSandbox.subscribe('resetTodos', todoCollection, todoCollection.reset);
+    todoSandbox.subscribe('removeCompleted', todoCollection, todoCollection.removeCompleted);
+
 
 
     //Kick off the app
-    todoObserver.publish('init');
+    todoSandbox.publish('init');
 
 })();
