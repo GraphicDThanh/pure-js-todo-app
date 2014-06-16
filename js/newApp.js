@@ -4,7 +4,7 @@
     'use strict';
 
     var doc = document,
-        ServiceLocalStorage = function (queryName) {    // Services for local storage. Easily replaceable with custom service.
+        ServiceLocalStorage = function (queryName) { // Services for local storage. Easily replaceable with custom service.
             var get = function () {
                     return JSON.parse(localStorage.getItem(queryName)) || [];
                 },
@@ -20,19 +20,21 @@
         },
 
 
-        TodoModel = function (content, flag) {      // Basic Todo model
+        TodoModel = function (content, flag) { // Basic Todo model
             this.content = content || '';
-            this.flag = flag || true;
+            this.flag = typeof flag === 'boolean' ? flag : true;
         },
 
 
-        TodoCollection = function () {      // Collection governs the data layer.
+        TodoCollection = function (observer) { // Collection governs the data layer.
             var todos,
 
                 deleteTodo = function (id) {
+                    console.log('deleting' + id);
                     if (todos[id]) {
                         todos.splice(id, 1);
                     }
+                    observer.publish('dataChange');
                 },
 
                 saveTodo = function (todo) {
@@ -42,10 +44,23 @@
                     } else {
                         todos[todoIndex] = todo;
                     }
+                    observer.publish('dataChange');
+                },
+
+                toggleTodo = function (todo) {
+                    var todoIndex = todos.indexOf(todo),
+                        updatedTodo = new TodoModel(todo.content, !todo.flag);
+                    if (todoIndex < 0) {
+                        todos.push(updatedTodo);
+                    } else {
+                        todos[todoIndex] = updatedTodo;
+                    }
+                    observer.publish('dataChange');
                 },
 
                 init = function (data) {
                     todos = data;
+                    observer.publish('dataChange');
                 },
 
                 getTodos = function () {
@@ -61,13 +76,13 @@
                 getItems: getTodos,
                 getItem: getTodo,
                 save: saveTodo,
-                init: init,
-                todos: todos
+                toggle: toggleTodo,
+                init: init
             };
         },
 
 
-        TodoView = function (element) {     // View renders and updates the UI
+        TodoView = function (element) { // View renders and updates the UI
             var $this = this,
 
                 sum = function (a, b) {
@@ -75,27 +90,26 @@
                 },
 
                 render = function (collection) {
+                    console.log(collection);
                     $this.element.innerHTML = '';
-                    var listFrag = doc.createDocumentFragment();    // create and attach template to a document partial before inserting into DOM
+                    var listFrag = doc.createDocumentFragment(); // create and attach to a document partial before inserting into DOM
                     listFrag.innerHTML = '';
 
                     for (var i = 0; i < collection.length; i++) {
-                        var item = collection[i],
-                            checked = item.flag === false ? 'checked' : '',
-                            liFrag = [],
-                            liSum;
-
+                        var item = collection[i];
+                        var checked = item.flag === false ? 'checked' : '';
+                        var liFrag = [];
                         liFrag.push('<li class="'+ checked +'" data-todoID="'+i+'">');
                         liFrag.push('<span class="checkbox"><input type="checkbox" '+ checked +' /></span>');
                         liFrag.push('<span class="li-content text-left">'+item.content+'</span>');
                         liFrag.push('<span class="action text-right"><button class="btn-delete" data-todoID="'+i+'">x</button></span>');
                         liFrag.push('</li>');
-                        liSum = liFrag.reduce(sum);    // a rather rudimentary template
-                        listFrag.innerHTML += liSum;
+                        listFrag.innerHTML += liFrag.reduce(sum);
                     }
 
-                    element.innerHTML = listFrag.innerHTML;     // insert into DOM only once per render
-                };
+                    console.log('rendered');
+                    element.innerHTML = listFrag.innerHTML; // insert into DOM only once per render
+                }
 
             this.element = element;
 
@@ -105,89 +119,84 @@
         },
 
 
-        TodoSandbox = function() {      // Sandbox for communication between view, services and collection
-            var modules = {},
+        TodoEvents = function (element, observer) { // UI events are delegated to subelements of the wrapper for easy reattaching
+            element.onclick = function (e) {
+                var el = e.target,
+                    wrapper = el.parentNode.parentNode,
+                    todoId = wrapper.dataset.todoid.length > 0 ? wrapper.dataset.todoid : null;
 
-                register = function (module, type) {
-                   modules[type] = module;
-                },
-
-                render = function () {
-                    modules.collection.init(modules.service.get());
-                    modules.view.render(modules.collection.getItems());
-                },
-
-                deleteItem = function (id) {
-                    modules.collection.deleteItem(id);
-                    syncState();
-                },
-
-                save = function (todo) {
-                    modules.collection.save(todo);
-                    syncState();
-                },
-
-                toggle = function (id) {
-                    var todo = modules.collection.getItem(id);
-                    todo.flag = !todo.flag;
-                    modules.collection.save(todo);
-                    syncState();
-                },
-
-                syncState = function () {   // facade for updating the display
-                    var todos = modules.collection.getItems();
-                    modules.service.set(todos);
-                    modules.view.render(todos);
-                };
-
-            return {
-                render: render,
-                deleteItem: deleteItem,
-                save: save,
-                register: register,
-                toggle: toggle,
+                if (el) {
+                    if (el.classList.contains('btn-delete')) {
+                        observer.publish('todoRemove', todoId);
+                    }
+                    if (el.type === 'checkbox') {
+                        observer.publish('toggleState', todoId);
+                    }
+                    if (el.id === 'todoAdd') {
+                        var content = doc.getElementById('todoAdd-content').value;
+                        observer.publish('todoAdd', new TodoModel(content, true));
+                    }
+                }
             };
         },
 
 
-        TodoEvents = function (element, controller) {   // UI events are delegated to sub-elements of the wrapper for easy reattaching
-            element.onclick = function (e) {
-                var el = e.target,
-                    wrapper = el.parentNode.parentNode,
-                    todoId = wrapper.dataset.todoid || null;
+        TodoObserver = function() {
+            this.topics = [];
+            var $this = this,
+                subscribe = function(topic, module, func, args) {
+                    if ($this.topics[topic]) {
+                        $this.topics[topic].push({module: module, func: func, args: args});
+                    } else {
+                        $this.topics[topic] = new Array({module: module, func: func, args: args});
+                    }
+                },
 
-                if (el) {
-                    if (el.classList.contains('btn-delete')) {
-                        controller.deleteItem(todoId);
+                unsub = function(topic, module) {
+                    console.log($this.topics[topic].indexOf(module));
+                    //$this.topics[topic].splice($this.topics[topic].indexOf(module), 1);
+                },
+
+                publish = function(topic, args) {
+                    var subscribers = $this.topics[topic] || [];
+                    if (subscribers.length > 0) {
+                        for (var i = 0; i < subscribers.length; i++) {
+                            if (typeof subscribers[i].args == 'function') {
+                                subscribers[i].func(subscribers[i].args(args));
+                            } else {
+                                subscribers[i].func(args);
+                            }
+                        }
                     }
-                    if (el.type === 'checkbox') {
-                        controller.toggle(todoId);
-                    }
-                    if (el.id === 'todoAdd') {
-                        var contentElement = doc.getElementById('todoAdd-content'),
-                            newTodo = new TodoModel(contentElement.value);
-                        controller.save(newTodo);
-                        contentElement.value = '';
-                    }
-                }
+                };
+
+            return {
+                subscribe: subscribe,
+                unsub: unsub,
+                publish: publish
             };
         };
 
 
 
-    var listEl = doc.getElementById('todoList'),
-        wrapperEl = doc.getElementById('listWrapper'),
-        todoSandbox = new TodoSandbox(),
-        todoView = new TodoView(listEl),
-        todoCollection = new TodoCollection(),
-        serviceLocalStorage = new ServiceLocalStorage('todos'),   // todos is simply a label by which we retrieve the data from local storage
-        todoEvents = new TodoEvents(wrapperEl, todoSandbox);
+    var todoObserver = new TodoObserver(),
+        todoView = new TodoView(doc.getElementById('todoList')),
+        todoCollection = new TodoCollection(todoObserver),
+        serviceLocalStorage = new ServiceLocalStorage('todos'),
+        todoEvents = new TodoEvents(doc.getElementById('listWrapper'), todoObserver);
 
-    todoSandbox.register(todoView, 'view');
-    todoSandbox.register(todoCollection, 'collection');
-    todoSandbox.register(serviceLocalStorage, 'service');
 
-    todoSandbox.render();
+    todoObserver.subscribe('init', todoCollection, todoCollection.init, serviceLocalStorage.get);
+    todoObserver.subscribe('dataChange', serviceLocalStorage, serviceLocalStorage.set, todoCollection.getItems);
+    todoObserver.subscribe('dataChange', todoView, todoView.render, todoCollection.getItems);
+    todoObserver.subscribe('toggleState', todoCollection, todoCollection.toggle, function(args) {
+        return todoCollection.getItem(args);
+    });
+    todoObserver.subscribe('todoRemove', todoCollection, todoCollection.deleteItem);
+    todoObserver.subscribe('todoAdd', todoCollection, todoCollection.save);
 
+    todoObserver.unsub('dataChange', serviceLocalStorage);
+
+    todoObserver.publish('init');
 
 })();
